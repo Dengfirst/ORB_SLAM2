@@ -45,7 +45,7 @@ int main(int argc, char **argv)
     vector<string> vstrImageFilenames;
     vector<double> vTimestamps;
     string strFile = string(argv[3])+"/rgb.txt";
-    LoadImages(strFile, vstrImageFilenames, vTimestamps);
+    LoadImages(strFile, vstrImageFilenames, vTimestamps); // 载入图像， 序列号 时间戳
 
     int nImages = vstrImageFilenames.size();
 
