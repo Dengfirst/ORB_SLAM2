@@ -29,10 +29,10 @@
 
 namespace ORB_SLAM2
 {
-
+//给定参考帧构建Initializer
 Initializer::Initializer(const Frame &ReferenceFrame, float sigma, int iterations)
 {
-    mK = ReferenceFrame.mK.clone();
+    mK = ReferenceFrame.mK.clone();      //mK 相机内参
 
     mvKeys1 = ReferenceFrame.mvKeysUn;
 
@@ -69,25 +69,28 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatc
     vAllIndices.reserve(N);
     vector<size_t> vAvailableIndices;
 
+    //生成0 —— N-1数作为特征点的索引，容器是否可以采用 vAllIndices[i]来访问？？？ 回答：可以的
     for(int i=0; i<N; i++)
     {
         vAllIndices.push_back(i);
     }
 
     // Generate sets of 8 points for each RANSAC iteration
+    // 步骤一：设置二维容器，第一维存储迭代次数，第二维存储RANSAC需要的八点
     mvSets = vector< vector<size_t> >(mMaxIterations,vector<size_t>(8,0));
 
     DUtils::Random::SeedRandOnce(0);
-
+    //进行迭代
     for(int it=0; it<mMaxIterations; it++)
     {
         vAvailableIndices = vAllIndices;
 
         // Select a minimum set
+        //设置每一次迭代对应的8个点，为了保证不重复使用，把每次生成对应的索引点删去
         for(size_t j=0; j<8; j++)
         {
             int randi = DUtils::Random::RandomInt(0,vAvailableIndices.size()-1);
-            int idx = vAvailableIndices[randi];
+            int idx = vAvailableIndices[randi];    //这里将 vAvailableIndices[randi] 赋给了索引 idx
 
             mvSets[it][j] = idx;
 
@@ -491,6 +494,7 @@ bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv:
     vector<bool> vbTriangulated1,vbTriangulated2,vbTriangulated3, vbTriangulated4;
     float parallax1,parallax2, parallax3, parallax4;
 
+    //分别计算四种解情况 3D 点在摄像头前方的个数
     int nGood1 = CheckRT(R1,t1,mvKeys1,mvKeys2,mvMatches12,vbMatchesInliers,K, vP3D1, 4.0*mSigma2, vbTriangulated1, parallax1);
     int nGood2 = CheckRT(R2,t1,mvKeys1,mvKeys2,mvMatches12,vbMatchesInliers,K, vP3D2, 4.0*mSigma2, vbTriangulated2, parallax2);
     int nGood3 = CheckRT(R1,t2,mvKeys1,mvKeys2,mvMatches12,vbMatchesInliers,K, vP3D3, 4.0*mSigma2, vbTriangulated3, parallax3);
@@ -501,8 +505,10 @@ bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv:
     R21 = cv::Mat();
     t21 = cv::Mat();
 
+    // minTriangulated为可以三角化恢复三维点的个数
     int nMinGood = max(static_cast<int>(0.9*N),minTriangulated);
 
+    //四种解的情况只有一种情况满足在摄像头前方，若出现两种及以上满足的解的点个数满足大于70%三角化的点个数则为假
     int nsimilar = 0;
     if(nGood1>0.7*maxGood)
         nsimilar++;
@@ -520,6 +526,7 @@ bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv:
     }
 
     // If best reconstruction has enough parallax initialize
+    // 选取两个关键帧视差角比较大的进行重建
     if(maxGood==nGood1)
     {
         if(parallax1>minParallax)
@@ -594,6 +601,7 @@ bool Initializer::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv:
     float d2 = w.at<float>(1);
     float d3 = w.at<float>(2);
 
+    // SVD分解的正常情况是特征值降序排列
     if(d1/d2<1.00001 || d2/d3<1.00001)
     {
         return false;
@@ -605,17 +613,20 @@ bool Initializer::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv:
     vn.reserve(8);
 
     //n'=[x1 0 x3] 4 posibilities e1=e3=1, e1=1 e3=-1, e1=-1 e3=1, e1=e3=-1
+    // 法向量n'= [x1 0 x3] 对应ppt的公式17
     float aux1 = sqrt((d1*d1-d2*d2)/(d1*d1-d3*d3));
     float aux3 = sqrt((d2*d2-d3*d3)/(d1*d1-d3*d3));
     float x1[] = {aux1,aux1,-aux1,-aux1};
     float x3[] = {aux3,-aux3,aux3,-aux3};
 
     //case d'=d2
+    // 计算ppt中公式19
     float aux_stheta = sqrt((d1*d1-d2*d2)*(d2*d2-d3*d3))/((d1+d3)*d2);
 
     float ctheta = (d2*d2+d1*d3)/((d1+d3)*d2);
     float stheta[] = {aux_stheta, -aux_stheta, -aux_stheta, aux_stheta};
 
+    // 计算旋转矩阵 R‘，计算ppt中公式18
     for(int i=0; i<4; i++)
     {
         cv::Mat Rp=cv::Mat::eye(3,3,CV_32F);
@@ -648,11 +659,13 @@ bool Initializer::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv:
     }
 
     //case d'=-d2
+    // 计算ppt中公式22
     float aux_sphi = sqrt((d1*d1-d2*d2)*(d2*d2-d3*d3))/((d1-d3)*d2);
 
     float cphi = (d1*d3-d2*d2)/((d1-d3)*d2);
     float sphi[] = {aux_sphi, -aux_sphi, -aux_sphi, aux_sphi};
 
+    // 计算旋转矩阵 R‘，计算ppt中公式21
     for(int i=0; i<4; i++)
     {
         cv::Mat Rp=cv::Mat::eye(3,3,CV_32F);
@@ -731,6 +744,38 @@ bool Initializer::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv:
     return false;
 }
 
+// Trianularization: 已知匹配特征点对{x x'} 和 各自相机矩阵{P P'}, 估计三维点 X
+// x' = P'X  x = PX
+// 它们都属于 x = aPX模型
+//                         |X|
+// |x|     |p1 p2  p3  p4 ||Y|     |x|    |--p0--||.|
+// |y| = a |p5 p6  p7  p8 ||Z| ===>|y| = a|--p1--||X|
+// |z|     |p9 p10 p11 p12||1|     |z|    |--p2--||.|
+// 采用DLT的方法：x叉乘PX = 0
+// |yp2 -  p1|     |0|
+// |p0 -  xp2| X = |0|
+// |xp1 - yp0|     |0|
+// 两个点:
+// |yp2   -  p1  |     |0|
+// |p0    -  xp2 | X = |0| ===> AX = 0
+// |y'p2' -  p1' |     |0|
+// |p0'   - x'p2'|     |0|
+// 变成程序中的形式：
+// |xp2  - p0 |     |0|
+// |yp2  - p1 | X = |0| ===> AX = 0
+// |x'p2'- p0'|     |0|
+// |y'p2'- p1'|     |0|
+
+/**
+ * @brief 给定投影矩阵P1,P2和图像上的点kp1,kp2，从而恢复3D坐标
+ *
+ * @param kp1 特征点, in reference frame
+ * @param kp2 特征点, in current frame
+ * @param P1  投影矩阵P1
+ * @param P2  投影矩阵P２
+ * @param x3D 三维点
+ * @see       Multiple View Geometry in Computer Vision - 12.2 Linear triangulation methods p312
+ */
 void Initializer::Triangulate(const cv::KeyPoint &kp1, const cv::KeyPoint &kp2, const cv::Mat &P1, const cv::Mat &P2, cv::Mat &x3D)
 {
     cv::Mat A(4,4,CV_32F);
@@ -746,6 +791,7 @@ void Initializer::Triangulate(const cv::KeyPoint &kp1, const cv::KeyPoint &kp2, 
     x3D = x3D.rowRange(0,3)/x3D.at<float>(3);
 }
 
+//归一化特征点到同一尺度（作为normalize DLT的输入）
 void Initializer::Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2f> &vNormalizedPoints, cv::Mat &T)
 {
     float meanX = 0;
@@ -760,8 +806,8 @@ void Initializer::Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2
         meanY += vKeys[i].pt.y;
     }
 
-    meanX = meanX/N;
-    meanY = meanY/N;
+    meanX = meanX/N;     //坐标 X 的平均值
+    meanY = meanY/N;     //坐标 Y 的平均值
 
     float meanDevX = 0;
     float meanDevY = 0;
@@ -775,8 +821,8 @@ void Initializer::Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2
         meanDevY += fabs(vNormalizedPoints[i].y);
     }
 
-    meanDevX = meanDevX/N;
-    meanDevY = meanDevY/N;
+    meanDevX = meanDevX/N;     //
+    meanDevY = meanDevY/N;     //
 
     float sX = 1.0/meanDevX;
     float sY = 1.0/meanDevY;
@@ -794,8 +840,8 @@ void Initializer::Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2
     T.at<float>(1,2) = -meanY*sY;
 }
 
-
-int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::KeyPoint> &vKeys1, const vector<cv::KeyPoint> &vKeys2,
+//检查统计 3D 点在摄像头前方的个数
+int Initializer:: CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::KeyPoint> &vKeys1, const vector<cv::KeyPoint> &vKeys2,
                        const vector<Match> &vMatches12, vector<bool> &vbMatchesInliers,
                        const cv::Mat &K, vector<cv::Point3f> &vP3D, float th2, vector<bool> &vbGood, float &parallax)
 {
@@ -812,18 +858,21 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
     vCosParallax.reserve(vKeys1.size());
 
     // Camera 1 Projection Matrix K[I|0]
+    // 步骤1：得到一个相机的投影矩阵
+    // 以第一个相机的光心作为世界坐标系
     cv::Mat P1(3,4,CV_32F,cv::Scalar(0));
     K.copyTo(P1.rowRange(0,3).colRange(0,3));
-
+    // 第一个相机的光心在世界坐标系下的坐标
     cv::Mat O1 = cv::Mat::zeros(3,1,CV_32F);
 
     // Camera 2 Projection Matrix K[R|t]
+    // 步骤2：得到第二个相机的投影矩阵
     cv::Mat P2(3,4,CV_32F);
     R.copyTo(P2.rowRange(0,3).colRange(0,3));
     t.copyTo(P2.rowRange(0,3).col(3));
     P2 = K*P2;
-
-    cv::Mat O2 = -R.t()*t;
+    // 第二个相机的光心在世界坐标系下的坐标
+    cv::Mat O2 = - R.t()*t;
 
     int nGood=0;
 
@@ -835,7 +884,7 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
         const cv::KeyPoint &kp1 = vKeys1[vMatches12[i].first];
         const cv::KeyPoint &kp2 = vKeys2[vMatches12[i].second];
         cv::Mat p3dC1;
-
+        // 步骤3：利用三角法恢复三维点p3dC1（相机坐标系下3d坐标）
         Triangulate(kp1,kp2,P1,P2,p3dC1);
 
         if(!isfinite(p3dC1.at<float>(0)) || !isfinite(p3dC1.at<float>(1)) || !isfinite(p3dC1.at<float>(2)))
@@ -845,24 +894,29 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
         }
 
         // Check parallax
+        // 步骤4：计算视差角余弦值
         cv::Mat normal1 = p3dC1 - O1;
-        float dist1 = cv::norm(normal1);
+        float dist1 = cv::norm(normal1);       //计算向量o1-p的范数
 
         cv::Mat normal2 = p3dC1 - O2;
-        float dist2 = cv::norm(normal2);
+        float dist2 = cv::norm(normal2);       //计算向量o1-p的范数
 
-        float cosParallax = normal1.dot(normal2)/(dist1*dist2);
+        float cosParallax = normal1.dot(normal2)/(dist1*dist2);    // 计算角o1o2p的余弦值公式为：向量a。向量b /（a摸×b模）
 
+        // 步骤5：判断3D点是否在两个摄像头前方
         // Check depth in front of first camera (only if enough parallax, as "infinite" points can easily go to negative depth)
+        // 步骤5.1：3D点深度为负，在第一个摄像头后方，淘汰
         if(p3dC1.at<float>(2)<=0 && cosParallax<0.99998)
             continue;
 
         // Check depth in front of second camera (only if enough parallax, as "infinite" points can easily go to negative depth)
+        // 步骤5.2：3D点深度为负，在第二个摄像头后方，淘汰
         cv::Mat p3dC2 = R*p3dC1+t;
 
         if(p3dC2.at<float>(2)<=0 && cosParallax<0.99998)
             continue;
 
+        // 在第一帧图像中的重投影误差
         // Check reprojection error in first image
         float im1x, im1y;
         float invZ1 = 1.0/p3dC1.at<float>(2);
@@ -874,6 +928,7 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
         if(squareError1>th2)
             continue;
 
+        // 在第二帧图像中的重投影误差
         // Check reprojection error in second image
         float im2x, im2y;
         float invZ2 = 1.0/p3dC2.at<float>(2);
@@ -895,10 +950,13 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
 
     if(nGood>0)
     {
+        // 从小到大排序
         sort(vCosParallax.begin(),vCosParallax.end());
 
+        // trick! 排序后并没有取最大的视差角
+        // 取一个较大的视差角
         size_t idx = min(50,int(vCosParallax.size()-1));
-        parallax = acos(vCosParallax[idx])*180/CV_PI;
+        parallax = acos(vCosParallax[idx])*180/CV_PI;        //反余弦值
     }
     else
         parallax=0;

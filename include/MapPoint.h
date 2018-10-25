@@ -92,8 +92,8 @@ public:
     float mTrackProjX;
     float mTrackProjY;
     float mTrackProjXR;
-    bool mbTrackInView;
-    int mnTrackScaleLevel;
+    bool mbTrackInView;              // 判断该点是否要投影
+    int mnTrackScaleLevel;           // 跟踪尺度(距离)
     float mTrackViewCos;
     long unsigned int mnTrackReferenceForFrame;
     long unsigned int mnLastFrameSeen;

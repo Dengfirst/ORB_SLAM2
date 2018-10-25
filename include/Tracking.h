@@ -181,7 +181,7 @@ protected:
     //Map
     Map* mpMap;
 
-    //Calibration matrix
+    //Calibration matrix  校准矩阵
     cv::Mat mK;
     cv::Mat mDistCoef;
     float mbf;

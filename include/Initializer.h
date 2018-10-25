@@ -79,20 +79,20 @@ private:
     vector<cv::KeyPoint> mvKeys2;
 
     // Current Matches from Reference to Current
-    vector<Match> mvMatches12;
-    vector<bool> mvbMatched1;
+    vector<Match> mvMatches12;   // Match的数据结构是pair,mvMatches12只记录Reference到Current匹配上的特征点对
+    vector<bool> mvbMatched1;    // 记录Reference Frame的每个特征点在Current Frame是否有匹配的特征点
 
     // Calibration
-    cv::Mat mK;
+    cv::Mat mK;                  //相机内参
 
     // Standard Deviation and Variance
-    float mSigma, mSigma2;
+    float mSigma, mSigma2;       //测量误差
 
     // Ransac max iterations
-    int mMaxIterations;
+    int mMaxIterations;         //算Fundamental和Homography矩阵时RANSAC迭代次数
 
     // Ransac sets
-    vector<vector<size_t> > mvSets;   
+    vector<vector<size_t> > mvSets;   //二维容器，外层容器的大小为迭代次数，内层容器大小为每次迭代算H或F矩阵需要的点
 
 };
 
